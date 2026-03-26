@@ -168,8 +168,8 @@
 
         .dog-projectile {
             position: absolute;
-            width: 40px;  
-            height: 40px; 
+            width: 30px;  /* Reverted to 30px */
+            height: 30px; /* Reverted to 30px */
             image-rendering: pixelated;
         }
     </style>
@@ -220,6 +220,7 @@
     
     let maxHp = 92;
     let currentHp = 92;
+    let currentWave = 0; // NEW: Tracks which attack pattern to use
 
     const dialogueContent = document.getElementById('dialogue-content');
     const playerSoul = document.getElementById('player-soul');
@@ -290,14 +291,13 @@
     let attackTimer;
     let attackLoopId;
     
-    // ADJUSTED PHYSICS SETTINGS
     let player = { 
         x: 270, 
         y: 110, 
-        speed: 5.5,          // Increased from 4 for faster horizontal movement
+        speed: 5.5,          
         vy: 0, 
         gravity: 0.45,       
-        jumpPower: -7.5,     // Increased from -6.5 for a higher jump
+        jumpPower: -7.5,     
         invulnFrames: 0 
     };
     
@@ -306,6 +306,22 @@
 
     window.addEventListener('keydown', (e) => { if(keysHeld.hasOwnProperty(e.key)) keysHeld[e.key] = true; });
     window.addEventListener('keyup', (e) => { if(keysHeld.hasOwnProperty(e.key)) keysHeld[e.key] = false; });
+
+    // NEW: Helper function to spawn dogs at specific coordinates
+    function spawnDog(startX, velocityX) {
+        let img = document.createElement('img');
+        img.src = 'Challenger.png'; 
+        img.className = 'dog-projectile';
+        dialogueBox.appendChild(img);
+        
+        dogs.push({
+            element: img,
+            x: startX,
+            y: 140 - 30, // Locked to floor, adjusted for 30px height
+            vx: velocityX, 
+            width: 30, height: 30 
+        });
+    }
 
     function startAttack() {
         state = 'ATTACK';
@@ -318,24 +334,36 @@
         playerSoul.style.color = '#0033cc';
 
         dogs = [];
-        for(let i=0; i<5; i++) {
-            let img = document.createElement('img');
-            img.src = 'Challenger.png'; 
-            img.className = 'dog-projectile';
-            dialogueBox.appendChild(img);
-            
-            let isLeft = Math.random() > 0.5;
-            
-            dogs.push({
-                element: img,
-                x: isLeft ? (Math.random() * -300 - 50) : (560 + Math.random() * 300),
-                y: 140 - 40,
-                vx: isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2), 
-                width: 40, height: 40 
-            });
+        
+        // --- THE WAVE SYSTEM ---
+        if (currentWave === 0) {
+            // Wave 0: The Steady March (All from the right, spaced out)
+            spawnDog(600, -4);
+            spawnDog(750, -4);
+            spawnDog(900, -4);
+            spawnDog(1050, -4);
+            spawnDog(1200, -4);
+        } 
+        else if (currentWave === 1) {
+            // Wave 1: The Pincer (Coming from both sides simultaneously)
+            spawnDog(600, -3.5);
+            spawnDog(-100, 3.5);
+            spawnDog(850, -3.5);
+            spawnDog(-350, 3.5);
+            spawnDog(1100, -3.5);
+        } 
+        else {
+            // Wave 2+: The Fast Lane (Mix of fast and slow)
+            spawnDog(600, -6);
+            spawnDog(-200, 4);
+            spawnDog(800, -6);
+            spawnDog(1000, -3); // A slow one to mess up your timing
+            spawnDog(-600, 5);
         }
 
-        attackTimer = setTimeout(endAttack, 20000); 
+        currentWave++; // Increment wave for the next turn
+        
+        attackTimer = setTimeout(endAttack, 15000); // Shortened to 15s to keep it punchy
         requestAnimationFrame(updateAttack);
     }
 
@@ -350,7 +378,6 @@
         // 2. Vertical Movement & Variable Jump
         player.vy += player.gravity; 
         
-        // VARIABLE JUMP: Drop momentum early if key is released
         if (!keysHeld.ArrowUp && player.vy < 0) {
             player.vy *= 0.6; 
         }
@@ -385,17 +412,18 @@
         dogs.forEach(dog => {
             dog.x += dog.vx;
 
-            if (dog.x > 800 || dog.x < -200) {
-                let isLeft = Math.random() > 0.5;
-                dog.x = isLeft ? -50 : 560;
-                dog.vx = isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2);
+            // When a dog goes off-screen, loop it way to the back to keep the rhythm going
+            if (dog.vx < 0 && dog.x < -100) {
+                dog.x = 900; 
+            } else if (dog.vx > 0 && dog.x > 700) {
+                dog.x = -200;
             }
 
             dog.element.style.left = dog.x + 'px';
             dog.element.style.top = dog.y + 'px';
 
             if (player.invulnFrames === 0) {
-                let hitboxBuffer = 5; 
+                let hitboxBuffer = 3; // Reduced buffer because dogs are smaller again
                 
                 if (player.x < dog.x + dog.width - hitboxBuffer &&
                     player.x + 20 > dog.x + hitboxBuffer &&
