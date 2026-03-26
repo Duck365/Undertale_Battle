@@ -16,6 +16,7 @@
             height: 100vh;
             margin: 0;
             user-select: none;
+            overflow: hidden;
         }
 
         #game-container {
@@ -37,7 +38,7 @@
 
         #monster-area img {
             max-height: 100%;
-            image-rendering: pixelated; /* Keeps pixel art sharp */
+            image-rendering: pixelated;
         }
 
         #dialogue-box {
@@ -49,11 +50,13 @@
             font-size: 28px;
             line-height: 1.2;
             position: relative;
+            overflow: hidden; 
         }
 
         .submenu-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
             row-gap: 15px;
             margin-left: 20px;
         }
@@ -79,12 +82,16 @@
             font-weight: bold;
         }
 
+        .stat-label {
+            margin-right: 25px;
+        }
+        
         .hp-label {
-            margin: 0 15px;
+            margin-right: 15px;
         }
 
         .hp-bar-bg {
-            width: 60px;
+            width: 80px;
             height: 20px;
             background-color: red;
             margin-right: 15px;
@@ -94,6 +101,7 @@
             width: 100%;
             height: 100%;
             background-color: yellow;
+            transition: width 0.2s;
         }
 
         #buttons-container {
@@ -126,6 +134,22 @@
             margin-right: 8px;
             font-size: 20px;
         }
+
+        #player-soul {
+            position: absolute;
+            font-size: 24px;
+            display: none;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+        }
+
+        .dog-projectile {
+            position: absolute;
+            width: 30px; 
+            image-rendering: pixelated;
+        }
     </style>
 </head>
 <body>
@@ -137,13 +161,15 @@
 
     <div id="dialogue-box">
         <div id="dialogue-content"></div>
+        <div id="player-soul">♥</div>
     </div>
 
     <div id="stats-bar">
-        <span>LV 1</span>
+        <span class="stat-label">Frisk</span>
+        <span class="stat-label">LV 19</span>
         <span class="hp-label">HP</span>
-        <div class="hp-bar-bg"><div class="hp-bar-fill"></div></div>
-        <span>92 / 92</span>
+        <div class="hp-bar-bg"><div id="hp-fill" class="hp-bar-fill"></div></div>
+        <span id="hp-text">92 / 92</span>
     </div>
 
     <div id="buttons-container">
@@ -160,13 +186,20 @@
     const itemOptions = ["Spaghetti", "Spaghetti", "Pizza", "Mac & Cheese", "Mac & Cheese", "Snow Cone"];
     
     // --- STATE VARIABLES ---
-    let state = 'MAIN'; // Can be: 'MAIN', 'ACT', 'ITEM', 'MSG'
-    let mainIndex = 0; // 0=FIGHT, 1=ACT, 2=ITEM, 3=MERCY
-    let subIndex = 0;  // Index for navigating Act or Item lists
+    let state = 'MAIN'; 
+    let mainIndex = 0; 
+    let subIndex = 0;  
     let currentMessage = "* Fight dialogue";
+    
+    let maxHp = 92;
+    let currentHp = 92;
 
     // --- DOM ELEMENTS ---
     const dialogueContent = document.getElementById('dialogue-content');
+    const playerSoul = document.getElementById('player-soul');
+    const dialogueBox = document.getElementById('dialogue-box');
+    const hpFill = document.getElementById('hp-fill');
+    const hpText = document.getElementById('hp-text');
     const buttons = [
         document.getElementById('btn-fight'),
         document.getElementById('btn-act'),
@@ -175,9 +208,10 @@
     ];
 
     // --- RENDER FUNCTION ---
-    // This updates the screen based on the current state and indexes
     function render() {
-        // Update Bottom Buttons
+        hpText.innerText = `${currentHp} / ${maxHp}`;
+        hpFill.style.width = `${(currentHp / maxHp) * 100}%`;
+
         buttons.forEach((btn, i) => {
             if (state === 'MAIN' && mainIndex === i) {
                 btn.className = 'action-button selected';
@@ -188,37 +222,189 @@
             }
         });
 
-        // Update Dialogue Box
         if (state === 'MAIN' || state === 'MSG') {
+            dialogueContent.style.display = 'block';
             dialogueContent.innerHTML = currentMessage;
         } else if (state === 'ACT' || state === 'ITEM') {
+            dialogueContent.style.display = 'block';
             const options = state === 'ACT' ? actOptions : itemOptions;
+            
+            let page = Math.floor(subIndex / 4);
+            let startIndex = page * 4;
+            let endIndex = Math.min(startIndex + 4, options.length);
+
             let html = '<div class="submenu-grid">';
-            
-            options.forEach((opt, i) => {
+            for (let i = startIndex; i < endIndex; i++) {
                 const heart = (i === subIndex) ? '<span class="heart">♥</span>' : '';
-                html += `<div class="menu-item">* ${heart}${opt}</div>`;
-            });
-            
+                html += `<div class="menu-item">* ${heart}${options[i]}</div>`;
+            }
             html += '</div>';
+            
+            if (options.length > 4) {
+                html += `<div style="position:absolute; right:10px; bottom:10px; font-size:16px;">Page ${page+1}/${Math.ceil(options.length/4)}</div>`;
+            }
+
             dialogueContent.innerHTML = html;
+        } else if (state === 'ATTACK') {
+            dialogueContent.style.display = 'none';
         }
     }
 
-    // --- INPUT HANDLING ---
+    // --- ATTACK MINIGAME ENGINE WITH GRAVITY ---
+    let attackTimer;
+    let attackLoopId;
+    
+    // Added vy (vertical velocity), gravity, and jumpPower
+    let player = { 
+        x: 270, 
+        y: 110, 
+        speed: 4, 
+        vy: 0, 
+        gravity: 0.6, 
+        jumpPower: -9, 
+        invulnFrames: 0 
+    };
+    
+    let dogs = [];
+    const keysHeld = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+    window.addEventListener('keydown', (e) => { if(keysHeld.hasOwnProperty(e.key)) keysHeld[e.key] = true; });
+    window.addEventListener('keyup', (e) => { if(keysHeld.hasOwnProperty(e.key)) keysHeld[e.key] = false; });
+
+    function startAttack() {
+        state = 'ATTACK';
+        render();
+        
+        // Start player on the "floor" of the box
+        player.x = 270; 
+        player.y = 110; 
+        player.vy = 0;
+        playerSoul.style.display = 'block';
+        playerSoul.style.color = '#0033cc'; // Undertale Blue Soul Color
+
+        // Spawn 3 Annoying Dogs
+        dogs = [];
+        for(let i=0; i<3; i++) {
+            let img = document.createElement('img');
+            img.src = 'dog.png'; 
+            img.className = 'dog-projectile';
+            dialogueBox.appendChild(img);
+            
+            dogs.push({
+                element: img,
+                x: Math.random() * 500,
+                y: Math.random() * 80, // Spawn them a bit higher up
+                vx: (Math.random() > 0.5 ? 4 : -4), 
+                vy: (Math.random() > 0.5 ? 3 : -3), 
+                width: 30, height: 30
+            });
+        }
+
+        attackTimer = setTimeout(endAttack, 20000); // 20 seconds
+        requestAnimationFrame(updateAttack);
+    }
+
+    function updateAttack() {
+        if (state !== 'ATTACK') return; 
+
+        // 1. Horizontal Movement
+        if (keysHeld.ArrowLeft) player.x -= player.speed;
+        if (keysHeld.ArrowRight) player.x += player.speed;
+
+        // Apply Horizontal Box Boundaries
+        player.x = Math.max(0, Math.min(player.x, 560 - 20));
+
+        // 2. Vertical Movement (Gravity & Jumping)
+        player.vy += player.gravity; // Gravity constantly pulls down
+        player.y += player.vy;       // Apply velocity to position
+
+        const floorY = 140 - 25; // The bottom edge of the dialogue box
+        let isGrounded = false;
+
+        // Floor Collision
+        if (player.y >= floorY) {
+            player.y = floorY; // Snap to floor
+            player.vy = 0;     // Stop falling
+            isGrounded = true;
+        }
+
+        // Ceiling Collision (prevent jumping out the top)
+        if (player.y <= 0) {
+            player.y = 0;
+            player.vy = 0; // Bonk head, stop moving up
+        }
+
+        // Jump Logic (Only if on the floor)
+        if (keysHeld.ArrowUp && isGrounded) {
+            player.vy = player.jumpPower; 
+        }
+
+        // Blinking effect if invulnerable
+        if (player.invulnFrames > 0) {
+            player.invulnFrames--;
+            playerSoul.style.opacity = (player.invulnFrames % 10 < 5) ? 0.3 : 1;
+        } else {
+            playerSoul.style.opacity = 1;
+        }
+
+        // Update CSS position
+        playerSoul.style.left = player.x + 'px';
+        playerSoul.style.top = player.y + 'px';
+
+        // 3. Move Dogs & Check Hit
+        dogs.forEach(dog => {
+            dog.x += dog.vx;
+            dog.y += dog.vy;
+
+            if (dog.x <= 0 || dog.x >= 560 - dog.width) dog.vx *= -1;
+            if (dog.y <= 0 || dog.y >= 140 - dog.height) dog.vy *= -1;
+
+            dog.element.style.left = dog.x + 'px';
+            dog.element.style.top = dog.y + 'px';
+
+            if (player.invulnFrames === 0) {
+                if (player.x < dog.x + dog.width &&
+                    player.x + 20 > dog.x &&
+                    player.y < dog.y + dog.height &&
+                    player.y + 20 > dog.y) {
+                    
+                    currentHp = Math.max(0, currentHp - 7);
+                    player.invulnFrames = 60; 
+                    render(); 
+                }
+            }
+        });
+
+        attackLoopId = requestAnimationFrame(updateAttack);
+    }
+
+    function endAttack() {
+        clearTimeout(attackTimer);
+        cancelAnimationFrame(attackLoopId);
+        playerSoul.style.display = 'none';
+        
+        dogs.forEach(dog => dog.element.remove());
+        dogs = [];
+
+        state = 'MAIN';
+        currentMessage = "* It is your turn.";
+        render();
+    }
+
+    // --- MENU INPUT HANDLING ---
     document.addEventListener('keydown', (e) => {
+        if (state === 'ATTACK') return; 
+
         const key = e.key.toLowerCase();
         const confirmKeys = ['z', 'enter'];
         const cancelKeys = ['x', 'shift'];
 
-        // MAIN MENU LOGIC
         if (state === 'MAIN') {
             if (key === 'arrowleft') mainIndex = Math.max(0, mainIndex - 1);
             if (key === 'arrowright') mainIndex = Math.min(3, mainIndex + 1);
             
             if (confirmKeys.includes(key)) {
                 if (mainIndex === 0 || mainIndex === 3) {
-                    // Fight and Mercy don't do anything yet
                     currentMessage = "* Not implemented yet.";
                     state = 'MSG';
                 } else if (mainIndex === 1) {
@@ -230,8 +416,6 @@
                 }
             }
         } 
-        
-        // ACT & ITEM SUB-MENU LOGIC
         else if (state === 'ACT' || state === 'ITEM') {
             const options = state === 'ACT' ? actOptions : itemOptions;
             
@@ -240,7 +424,6 @@
                 currentMessage = "* Fight dialogue";
             }
             
-            // Grid Navigation (2 columns)
             if (key === 'arrowleft' && subIndex % 2 !== 0) subIndex--;
             if (key === 'arrowright' && subIndex % 2 === 0 && subIndex + 1 < options.length) subIndex++;
             if (key === 'arrowup' && subIndex >= 2) subIndex -= 2;
@@ -250,25 +433,31 @@
                 if (state === 'ACT') {
                     if (subIndex === 0) currentMessage = "* Hi";
                     if (subIndex === 1) currentMessage = "* You tried talking to it, but it<br>  didn't respond.";
+                    
+                    state = 'MSG';
+                    dialogueContent.dataset.nextState = 'ATTACK'; 
                 } else if (state === 'ITEM') {
                     currentMessage = `* You aren't hungry for ${options[subIndex]}.`;
+                    state = 'MSG';
+                    dialogueContent.dataset.nextState = 'MAIN';
                 }
-                state = 'MSG';
             }
         } 
-        
-        // MESSAGE DISPLAY LOGIC
         else if (state === 'MSG') {
             if (confirmKeys.includes(key)) {
-                state = 'MAIN';
-                currentMessage = "* Fight dialogue";
+                if (dialogueContent.dataset.nextState === 'ATTACK') {
+                    startAttack();
+                } else {
+                    state = 'MAIN';
+                    currentMessage = "* Fight dialogue";
+                }
+                dialogueContent.dataset.nextState = ''; 
             }
         }
 
         render();
     });
 
-    // Initial draw
     render();
 </script>
 
