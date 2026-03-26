@@ -168,8 +168,8 @@
 
         .dog-projectile {
             position: absolute;
-            width: 30px; 
-            height: 30px;
+            width: 40px;  /* Made dogs bigger! */
+            height: 40px; /* Made dogs bigger! */
             image-rendering: pixelated;
         }
     </style>
@@ -213,7 +213,6 @@
     const actOptions = ["Hi", "Talk"];
     const itemOptions = ["Spaghetti", "Spaghetti", "Pizza", "Mac & Cheese", "Mac & Cheese", "Snow Cone"];
     
-    // --- STATE VARIABLES ---
     let state = 'MAIN'; 
     let mainIndex = 0; 
     let subIndex = 0;  
@@ -222,7 +221,6 @@
     let maxHp = 92;
     let currentHp = 92;
 
-    // --- DOM ELEMENTS ---
     const dialogueContent = document.getElementById('dialogue-content');
     const playerSoul = document.getElementById('player-soul');
     const dialogueBox = document.getElementById('dialogue-box');
@@ -237,7 +235,6 @@
         document.getElementById('btn-mercy')
     ];
 
-    // --- RENDER FUNCTION ---
     function render() {
         hpText.innerText = `${currentHp} / ${maxHp}`;
         hpFill.style.width = `${(currentHp / maxHp) * 100}%`;
@@ -280,29 +277,27 @@
         }
     }
 
-    // --- GAME OVER FUNCTION ---
     function triggerGameOver() {
         state = 'GAME_OVER';
         clearTimeout(attackTimer);
         cancelAnimationFrame(attackLoopId);
         
-        // Hide the game, show the game over screen
         gameContainer.style.display = 'none';
         gameOverScreen.style.display = 'flex';
     }
 
-    // --- ATTACK MINIGAME ENGINE WITH GRAVITY ---
+    // --- ATTACK MINIGAME ENGINE ---
     let attackTimer;
     let attackLoopId;
     
-    // Tweaked physics for a 1.5s floaty jump
+    // NEW PHYSICS SETTINGS
     let player = { 
         x: 270, 
         y: 110, 
         speed: 4, 
         vy: 0, 
-        gravity: 0.35,      // Lower gravity = more floaty
-        jumpPower: -11,     // Stronger initial jump
+        gravity: 0.45,       // Pulls you down at a steady rate
+        jumpPower: -6.5,     // Tuned to hit EXACTLY halfway up the box
         invulnFrames: 0 
     };
     
@@ -323,21 +318,21 @@
         playerSoul.style.color = '#0033cc';
 
         dogs = [];
-        for(let i=0; i<3; i++) {
+        // Increased to 5 dogs
+        for(let i=0; i<5; i++) {
             let img = document.createElement('img');
-            img.src = 'Challenger.png'; // Using your requested image
+            img.src = 'Challenger.png'; 
             img.className = 'dog-projectile';
             dialogueBox.appendChild(img);
             
-            // Randomize starting side (left or right off-screen)
             let isLeft = Math.random() > 0.5;
             
             dogs.push({
                 element: img,
-                x: isLeft ? (Math.random() * -200 - 50) : (560 + Math.random() * 200),
-                y: 140 - 30, // Locked to the floor
+                x: isLeft ? (Math.random() * -300 - 50) : (560 + Math.random() * 300),
+                y: 140 - 40, // Locked to the floor, accounting for new 40px height
                 vx: isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2), 
-                width: 30, height: 30
+                width: 40, height: 40 // Updated hitboxes
             });
         }
 
@@ -356,10 +351,9 @@
         // 2. Vertical Movement & Variable Jump
         player.vy += player.gravity; 
         
-        // VARIABLE JUMP HEIGHT LOGIC
-        // If the player lets go of the up arrow while moving upwards, we cut their momentum
+        // VARIABLE JUMP: If you let go of the up arrow early, you lose upward momentum instantly
         if (!keysHeld.ArrowUp && player.vy < 0) {
-            player.vy *= 0.7; 
+            player.vy *= 0.6; 
         }
 
         player.y += player.vy;       
@@ -371,11 +365,6 @@
             player.y = floorY; 
             player.vy = 0;     
             isGrounded = true;
-        }
-
-        if (player.y <= 0) {
-            player.y = 0;
-            player.vy = 0; 
         }
 
         if (keysHeld.ArrowUp && isGrounded) {
@@ -397,8 +386,7 @@
         dogs.forEach(dog => {
             dog.x += dog.vx;
 
-            // If a dog walks fully off-screen, loop it back around to a random side
-            if (dog.x > 700 || dog.x < -150) {
+            if (dog.x > 800 || dog.x < -200) {
                 let isLeft = Math.random() > 0.5;
                 dog.x = isLeft ? -50 : 560;
                 dog.vx = isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2);
@@ -408,16 +396,18 @@
             dog.element.style.top = dog.y + 'px';
 
             if (player.invulnFrames === 0) {
-                if (player.x < dog.x + dog.width &&
-                    player.x + 20 > dog.x &&
-                    player.y < dog.y + dog.height &&
-                    player.y + 20 > dog.y) {
+                // Tuned hitbox slightly so you don't get hit from "air" pixels around the image
+                let hitboxBuffer = 5; 
+                
+                if (player.x < dog.x + dog.width - hitboxBuffer &&
+                    player.x + 20 > dog.x + hitboxBuffer &&
+                    player.y < dog.y + dog.height - hitboxBuffer &&
+                    player.y + 20 > dog.y + hitboxBuffer) {
                     
                     currentHp = Math.max(0, currentHp - 7);
                     player.invulnFrames = 60; 
                     render(); 
 
-                    // Check for Game Over immediately after taking damage
                     if (currentHp <= 0) {
                         triggerGameOver();
                     }
@@ -431,7 +421,7 @@
     }
 
     function endAttack() {
-        if (state === 'GAME_OVER') return; // Don't run end logic if we died
+        if (state === 'GAME_OVER') return; 
 
         clearTimeout(attackTimer);
         cancelAnimationFrame(attackLoopId);
