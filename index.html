@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Undertale Battle Prototype</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'VT323', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+
+        #game-container {
+            width: 640px;
+            height: 480px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        #monster-area {
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        #monster-area img {
+            max-height: 100%;
+            image-rendering: pixelated; /* Keeps pixel art sharp */
+        }
+
+        #dialogue-box {
+            width: 560px;
+            height: 140px;
+            border: 4px solid white;
+            padding: 15px;
+            box-sizing: border-box;
+            font-size: 28px;
+            line-height: 1.2;
+            position: relative;
+        }
+
+        .submenu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            row-gap: 15px;
+            margin-left: 20px;
+        }
+
+        .menu-item {
+            position: relative;
+        }
+
+        .heart {
+            color: red;
+            position: absolute;
+            left: -25px;
+            top: 2px;
+            font-size: 24px;
+        }
+
+        #stats-bar {
+            width: 560px;
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .hp-label {
+            margin: 0 15px;
+        }
+
+        .hp-bar-bg {
+            width: 60px;
+            height: 20px;
+            background-color: red;
+            margin-right: 15px;
+        }
+
+        .hp-bar-fill {
+            width: 100%;
+            height: 100%;
+            background-color: yellow;
+        }
+
+        #buttons-container {
+            width: 560px;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 25px;
+        }
+
+        .action-button {
+            border: 2px solid #ff9900;
+            color: #ff9900;
+            padding: 5px 15px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+        }
+
+        .action-button.unselected {
+            border-color: #ff9900;
+            color: #ff9900;
+        }
+
+        .action-button.selected {
+            background-color: #ff9900;
+            color: black;
+        }
+        
+        .action-button .btn-icon {
+            margin-right: 8px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="monster-area">
+        <img src="Challenger.png" alt="Challenger">
+    </div>
+
+    <div id="dialogue-box">
+        <div id="dialogue-content"></div>
+    </div>
+
+    <div id="stats-bar">
+        <span>LV 1</span>
+        <span class="hp-label">HP</span>
+        <div class="hp-bar-bg"><div class="hp-bar-fill"></div></div>
+        <span>92 / 92</span>
+    </div>
+
+    <div id="buttons-container">
+        <div class="action-button" id="btn-fight"><span class="btn-icon">♥</span> FIGHT</div>
+        <div class="action-button" id="btn-act"><span class="btn-icon">♥</span> ACT</div>
+        <div class="action-button" id="btn-item"><span class="btn-icon">♥</span> ITEM</div>
+        <div class="action-button" id="btn-mercy"><span class="btn-icon">♥</span> MERCY</div>
+    </div>
+</div>
+
+<script>
+    // --- GAME DATA ---
+    const actOptions = ["Hi", "Talk"];
+    const itemOptions = ["Spaghetti", "Spaghetti", "Pizza", "Mac & Cheese", "Mac & Cheese", "Snow Cone"];
+    
+    // --- STATE VARIABLES ---
+    let state = 'MAIN'; // Can be: 'MAIN', 'ACT', 'ITEM', 'MSG'
+    let mainIndex = 0; // 0=FIGHT, 1=ACT, 2=ITEM, 3=MERCY
+    let subIndex = 0;  // Index for navigating Act or Item lists
+    let currentMessage = "* Fight dialogue";
+
+    // --- DOM ELEMENTS ---
+    const dialogueContent = document.getElementById('dialogue-content');
+    const buttons = [
+        document.getElementById('btn-fight'),
+        document.getElementById('btn-act'),
+        document.getElementById('btn-item'),
+        document.getElementById('btn-mercy')
+    ];
+
+    // --- RENDER FUNCTION ---
+    // This updates the screen based on the current state and indexes
+    function render() {
+        // Update Bottom Buttons
+        buttons.forEach((btn, i) => {
+            if (state === 'MAIN' && mainIndex === i) {
+                btn.className = 'action-button selected';
+                btn.querySelector('.btn-icon').style.visibility = 'visible';
+            } else {
+                btn.className = 'action-button unselected';
+                btn.querySelector('.btn-icon').style.visibility = 'hidden';
+            }
+        });
+
+        // Update Dialogue Box
+        if (state === 'MAIN' || state === 'MSG') {
+            dialogueContent.innerHTML = currentMessage;
+        } else if (state === 'ACT' || state === 'ITEM') {
+            const options = state === 'ACT' ? actOptions : itemOptions;
+            let html = '<div class="submenu-grid">';
+            
+            options.forEach((opt, i) => {
+                const heart = (i === subIndex) ? '<span class="heart">♥</span>' : '';
+                html += `<div class="menu-item">* ${heart}${opt}</div>`;
+            });
+            
+            html += '</div>';
+            dialogueContent.innerHTML = html;
+        }
+    }
+
+    // --- INPUT HANDLING ---
+    document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        const confirmKeys = ['z', 'enter'];
+        const cancelKeys = ['x', 'shift'];
+
+        // MAIN MENU LOGIC
+        if (state === 'MAIN') {
+            if (key === 'arrowleft') mainIndex = Math.max(0, mainIndex - 1);
+            if (key === 'arrowright') mainIndex = Math.min(3, mainIndex + 1);
+            
+            if (confirmKeys.includes(key)) {
+                if (mainIndex === 0 || mainIndex === 3) {
+                    // Fight and Mercy don't do anything yet
+                    currentMessage = "* Not implemented yet.";
+                    state = 'MSG';
+                } else if (mainIndex === 1) {
+                    state = 'ACT';
+                    subIndex = 0;
+                } else if (mainIndex === 2) {
+                    state = 'ITEM';
+                    subIndex = 0;
+                }
+            }
+        } 
+        
+        // ACT & ITEM SUB-MENU LOGIC
+        else if (state === 'ACT' || state === 'ITEM') {
+            const options = state === 'ACT' ? actOptions : itemOptions;
+            
+            if (cancelKeys.includes(key)) {
+                state = 'MAIN';
+                currentMessage = "* Fight dialogue";
+            }
+            
+            // Grid Navigation (2 columns)
+            if (key === 'arrowleft' && subIndex % 2 !== 0) subIndex--;
+            if (key === 'arrowright' && subIndex % 2 === 0 && subIndex + 1 < options.length) subIndex++;
+            if (key === 'arrowup' && subIndex >= 2) subIndex -= 2;
+            if (key === 'arrowdown' && subIndex + 2 < options.length) subIndex += 2;
+
+            if (confirmKeys.includes(key)) {
+                if (state === 'ACT') {
+                    if (subIndex === 0) currentMessage = "* Hi";
+                    if (subIndex === 1) currentMessage = "* You tried talking to it, but it<br>  didn't respond.";
+                } else if (state === 'ITEM') {
+                    currentMessage = `* You aren't hungry for ${options[subIndex]}.`;
+                }
+                state = 'MSG';
+            }
+        } 
+        
+        // MESSAGE DISPLAY LOGIC
+        else if (state === 'MSG') {
+            if (confirmKeys.includes(key)) {
+                state = 'MAIN';
+                currentMessage = "* Fight dialogue";
+            }
+        }
+
+        render();
+    });
+
+    // Initial draw
+    render();
+</script>
+
+</body>
+</html>
