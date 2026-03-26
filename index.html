@@ -28,6 +28,45 @@
             position: relative;
         }
 
+        /* --- GAME OVER SCREEN --- */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: black;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #game-over-title {
+            font-size: 72px;
+            margin-bottom: 10px;
+        }
+
+        #game-over-subtitle {
+            font-size: 24px;
+            color: #aaaaaa;
+            margin-bottom: 40px;
+        }
+
+        #btn-ok {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+            font-family: 'VT323', monospace;
+            font-size: 28px;
+            padding: 10px 30px;
+            cursor: pointer;
+        }
+
+        #btn-ok:hover {
+            background: white;
+            color: black;
+        }
+
+        /* --- BATTLE UI --- */
         #monster-area {
             height: 200px;
             display: flex;
@@ -61,9 +100,7 @@
             margin-left: 20px;
         }
 
-        .menu-item {
-            position: relative;
-        }
+        .menu-item { position: relative; }
 
         .heart {
             color: red;
@@ -82,13 +119,8 @@
             font-weight: bold;
         }
 
-        .stat-label {
-            margin-right: 25px;
-        }
-        
-        .hp-label {
-            margin-right: 15px;
-        }
+        .stat-label { margin-right: 25px; }
+        .hp-label { margin-right: 15px; }
 
         .hp-bar-bg {
             width: 80px;
@@ -120,20 +152,9 @@
             align-items: center;
         }
 
-        .action-button.unselected {
-            border-color: #ff9900;
-            color: #ff9900;
-        }
-
-        .action-button.selected {
-            background-color: #ff9900;
-            color: black;
-        }
-        
-        .action-button .btn-icon {
-            margin-right: 8px;
-            font-size: 20px;
-        }
+        .action-button.unselected { border-color: #ff9900; color: #ff9900; }
+        .action-button.selected { background-color: #ff9900; color: black; }
+        .action-button .btn-icon { margin-right: 8px; font-size: 20px; }
 
         #player-soul {
             position: absolute;
@@ -148,11 +169,18 @@
         .dog-projectile {
             position: absolute;
             width: 30px; 
+            height: 30px;
             image-rendering: pixelated;
         }
     </style>
 </head>
 <body>
+
+<div id="game-over-screen">
+    <div id="game-over-title">Game Over</div>
+    <div id="game-over-subtitle">by the annoying dog</div>
+    <button id="btn-ok" onclick="location.reload()">OK</button>
+</div>
 
 <div id="game-container">
     <div id="monster-area">
@@ -200,6 +228,8 @@
     const dialogueBox = document.getElementById('dialogue-box');
     const hpFill = document.getElementById('hp-fill');
     const hpText = document.getElementById('hp-text');
+    const gameContainer = document.getElementById('game-container');
+    const gameOverScreen = document.getElementById('game-over-screen');
     const buttons = [
         document.getElementById('btn-fight'),
         document.getElementById('btn-act'),
@@ -250,18 +280,29 @@
         }
     }
 
+    // --- GAME OVER FUNCTION ---
+    function triggerGameOver() {
+        state = 'GAME_OVER';
+        clearTimeout(attackTimer);
+        cancelAnimationFrame(attackLoopId);
+        
+        // Hide the game, show the game over screen
+        gameContainer.style.display = 'none';
+        gameOverScreen.style.display = 'flex';
+    }
+
     // --- ATTACK MINIGAME ENGINE WITH GRAVITY ---
     let attackTimer;
     let attackLoopId;
     
-    // Added vy (vertical velocity), gravity, and jumpPower
+    // Tweaked physics for a 1.5s floaty jump
     let player = { 
         x: 270, 
         y: 110, 
         speed: 4, 
         vy: 0, 
-        gravity: 0.6, 
-        jumpPower: -9, 
+        gravity: 0.35,      // Lower gravity = more floaty
+        jumpPower: -11,     // Stronger initial jump
         invulnFrames: 0 
     };
     
@@ -275,32 +316,32 @@
         state = 'ATTACK';
         render();
         
-        // Start player on the "floor" of the box
         player.x = 270; 
         player.y = 110; 
         player.vy = 0;
         playerSoul.style.display = 'block';
-        playerSoul.style.color = '#0033cc'; // Undertale Blue Soul Color
+        playerSoul.style.color = '#0033cc';
 
-        // Spawn 3 Annoying Dogs
         dogs = [];
         for(let i=0; i<3; i++) {
             let img = document.createElement('img');
-            img.src = 'dog.png'; 
+            img.src = 'Challenger.png'; // Using your requested image
             img.className = 'dog-projectile';
             dialogueBox.appendChild(img);
             
+            // Randomize starting side (left or right off-screen)
+            let isLeft = Math.random() > 0.5;
+            
             dogs.push({
                 element: img,
-                x: Math.random() * 500,
-                y: Math.random() * 80, // Spawn them a bit higher up
-                vx: (Math.random() > 0.5 ? 4 : -4), 
-                vy: (Math.random() > 0.5 ? 3 : -3), 
+                x: isLeft ? (Math.random() * -200 - 50) : (560 + Math.random() * 200),
+                y: 140 - 30, // Locked to the floor
+                vx: isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2), 
                 width: 30, height: 30
             });
         }
 
-        attackTimer = setTimeout(endAttack, 20000); // 20 seconds
+        attackTimer = setTimeout(endAttack, 20000); 
         requestAnimationFrame(updateAttack);
     }
 
@@ -310,36 +351,38 @@
         // 1. Horizontal Movement
         if (keysHeld.ArrowLeft) player.x -= player.speed;
         if (keysHeld.ArrowRight) player.x += player.speed;
-
-        // Apply Horizontal Box Boundaries
         player.x = Math.max(0, Math.min(player.x, 560 - 20));
 
-        // 2. Vertical Movement (Gravity & Jumping)
-        player.vy += player.gravity; // Gravity constantly pulls down
-        player.y += player.vy;       // Apply velocity to position
+        // 2. Vertical Movement & Variable Jump
+        player.vy += player.gravity; 
+        
+        // VARIABLE JUMP HEIGHT LOGIC
+        // If the player lets go of the up arrow while moving upwards, we cut their momentum
+        if (!keysHeld.ArrowUp && player.vy < 0) {
+            player.vy *= 0.7; 
+        }
 
-        const floorY = 140 - 25; // The bottom edge of the dialogue box
+        player.y += player.vy;       
+
+        const floorY = 140 - 25; 
         let isGrounded = false;
 
-        // Floor Collision
         if (player.y >= floorY) {
-            player.y = floorY; // Snap to floor
-            player.vy = 0;     // Stop falling
+            player.y = floorY; 
+            player.vy = 0;     
             isGrounded = true;
         }
 
-        // Ceiling Collision (prevent jumping out the top)
         if (player.y <= 0) {
             player.y = 0;
-            player.vy = 0; // Bonk head, stop moving up
+            player.vy = 0; 
         }
 
-        // Jump Logic (Only if on the floor)
         if (keysHeld.ArrowUp && isGrounded) {
             player.vy = player.jumpPower; 
         }
 
-        // Blinking effect if invulnerable
+        // Blinking
         if (player.invulnFrames > 0) {
             player.invulnFrames--;
             playerSoul.style.opacity = (player.invulnFrames % 10 < 5) ? 0.3 : 1;
@@ -347,17 +390,19 @@
             playerSoul.style.opacity = 1;
         }
 
-        // Update CSS position
         playerSoul.style.left = player.x + 'px';
         playerSoul.style.top = player.y + 'px';
 
         // 3. Move Dogs & Check Hit
         dogs.forEach(dog => {
             dog.x += dog.vx;
-            dog.y += dog.vy;
 
-            if (dog.x <= 0 || dog.x >= 560 - dog.width) dog.vx *= -1;
-            if (dog.y <= 0 || dog.y >= 140 - dog.height) dog.vy *= -1;
+            // If a dog walks fully off-screen, loop it back around to a random side
+            if (dog.x > 700 || dog.x < -150) {
+                let isLeft = Math.random() > 0.5;
+                dog.x = isLeft ? -50 : 560;
+                dog.vx = isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2);
+            }
 
             dog.element.style.left = dog.x + 'px';
             dog.element.style.top = dog.y + 'px';
@@ -371,14 +416,23 @@
                     currentHp = Math.max(0, currentHp - 7);
                     player.invulnFrames = 60; 
                     render(); 
+
+                    // Check for Game Over immediately after taking damage
+                    if (currentHp <= 0) {
+                        triggerGameOver();
+                    }
                 }
             }
         });
 
-        attackLoopId = requestAnimationFrame(updateAttack);
+        if (state === 'ATTACK') {
+            attackLoopId = requestAnimationFrame(updateAttack);
+        }
     }
 
     function endAttack() {
+        if (state === 'GAME_OVER') return; // Don't run end logic if we died
+
         clearTimeout(attackTimer);
         cancelAnimationFrame(attackLoopId);
         playerSoul.style.display = 'none';
@@ -393,7 +447,7 @@
 
     // --- MENU INPUT HANDLING ---
     document.addEventListener('keydown', (e) => {
-        if (state === 'ATTACK') return; 
+        if (state === 'ATTACK' || state === 'GAME_OVER') return; 
 
         const key = e.key.toLowerCase();
         const confirmKeys = ['z', 'enter'];
