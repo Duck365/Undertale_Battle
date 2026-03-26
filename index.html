@@ -168,8 +168,8 @@
 
         .dog-projectile {
             position: absolute;
-            width: 40px;  /* Made dogs bigger! */
-            height: 40px; /* Made dogs bigger! */
+            width: 40px;  
+            height: 40px; 
             image-rendering: pixelated;
         }
     </style>
@@ -290,14 +290,14 @@
     let attackTimer;
     let attackLoopId;
     
-    // NEW PHYSICS SETTINGS
+    // ADJUSTED PHYSICS SETTINGS
     let player = { 
         x: 270, 
         y: 110, 
-        speed: 4, 
+        speed: 5.5,          // Increased from 4 for faster horizontal movement
         vy: 0, 
-        gravity: 0.45,       // Pulls you down at a steady rate
-        jumpPower: -6.5,     // Tuned to hit EXACTLY halfway up the box
+        gravity: 0.45,       
+        jumpPower: -7.5,     // Increased from -6.5 for a higher jump
         invulnFrames: 0 
     };
     
@@ -318,7 +318,6 @@
         playerSoul.style.color = '#0033cc';
 
         dogs = [];
-        // Increased to 5 dogs
         for(let i=0; i<5; i++) {
             let img = document.createElement('img');
             img.src = 'Challenger.png'; 
@@ -330,9 +329,9 @@
             dogs.push({
                 element: img,
                 x: isLeft ? (Math.random() * -300 - 50) : (560 + Math.random() * 300),
-                y: 140 - 40, // Locked to the floor, accounting for new 40px height
+                y: 140 - 40,
                 vx: isLeft ? (Math.random() * 2 + 2) : -(Math.random() * 2 + 2), 
-                width: 40, height: 40 // Updated hitboxes
+                width: 40, height: 40 
             });
         }
 
@@ -351,7 +350,7 @@
         // 2. Vertical Movement & Variable Jump
         player.vy += player.gravity; 
         
-        // VARIABLE JUMP: If you let go of the up arrow early, you lose upward momentum instantly
+        // VARIABLE JUMP: Drop momentum early if key is released
         if (!keysHeld.ArrowUp && player.vy < 0) {
             player.vy *= 0.6; 
         }
@@ -396,7 +395,6 @@
             dog.element.style.top = dog.y + 'px';
 
             if (player.invulnFrames === 0) {
-                // Tuned hitbox slightly so you don't get hit from "air" pixels around the image
                 let hitboxBuffer = 5; 
                 
                 if (player.x < dog.x + dog.width - hitboxBuffer &&
